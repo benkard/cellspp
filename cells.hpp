@@ -79,7 +79,7 @@ namespace cells {
     virtual ~formula_cell();
   };
 
-  void with_transaction(std::function<void ()>);
+  static void with_transaction(std::function<void ()>);
 }
 
 #endif //CELLS_HPP

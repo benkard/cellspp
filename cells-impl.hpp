@@ -44,18 +44,18 @@ namespace cells {
   static thread_local dynvar<std::forward_list<std::shared_ptr<observer>>> current_dependencies;
   static thread_local dynvar<transaction> current_transaction;
 
-  void observer::clear_dependencies() {
+  inline void observer::clear_dependencies() {
     for (auto const& dep : dependencies) {
       dep->remove_dependent(this);
     }
     dependencies = {};
   }
 
-  void observer::add_dependent(std::shared_ptr<observer> dependent) {
+  inline void observer::add_dependent(std::shared_ptr<observer> dependent) {
     dependents.push_front(dependent);
   }
 
-  void observer::remove_dependent(observer* dependent) {
+  inline void observer::remove_dependent(observer* dependent) {
     dependents.remove_if([&](std::weak_ptr<observer> const& other) -> bool {
       std::shared_ptr<observer> other2 = other.lock();
       // note: this should also work for empty other
@@ -63,7 +63,7 @@ namespace cells {
     });
   }
   
-  void observer::reset_dependencies(std::forward_list<std::shared_ptr<observer>> const& newdeps) {
+  inline void observer::reset_dependencies(std::forward_list<std::shared_ptr<observer>> const& newdeps) {
     clear_dependencies();
     dependencies = newdeps;
     for (auto const& dep : newdeps) {
@@ -71,7 +71,7 @@ namespace cells {
     }
   }
 
-  void observer::mark() {
+  inline void observer::mark() {
     if (!current_transaction) {
       with_transaction([&]() { this->mark(); });
       return;
@@ -95,7 +95,7 @@ namespace cells {
     }
   }
 
-  observer::~observer() {
+  inline observer::~observer() {
     clear_dependencies();
   }
 
@@ -165,15 +165,15 @@ namespace cells {
   formula_cell<T>::~formula_cell() {
   }
 
-  void with_transaction(std::function<void ()> thunk) {
+  static void with_transaction(std::function<void ()> thunk) {
     using std::cout;
     using std::cerr;
     using std::endl;
     with<transaction, void>(current_transaction, transaction(), [&]() -> void {
-      //cerr << "; transaction." << endl;
+      //cerr << "; begin transaction." << endl;
       thunk();
 
-      //cerr << "; affected nodes: " << current_transaction->dag.size() << endl;
+      //cerr << "; number of affected nodes: " << current_transaction->dag.size() << endl;
       std::deque<std::shared_ptr<observer>> nodes;
 
       // topological sort
@@ -191,6 +191,10 @@ namespace cells {
         auto node = independent_nodes.front();
         independent_nodes.pop_front();
         nodes.push_back(node->item);
+        // Or we can do away with the nodes list and just do:
+        //    node->item->update()
+        // which makes transactions non-transactional but improves
+        // performance.
         for (dag_node* other : node->outgoing_edges) {
           other->incoming_edges.erase(node);
           if (other->incoming_edges.size() == 0) {
