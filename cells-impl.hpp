@@ -248,8 +248,10 @@ namespace cells {
             independent_nodes.push_front(other);
           }
         }
+        delete node;
       }
       if (left != 0) {
+        // FIXME: delete remaining dag_nodes.
         throw std::logic_error("Cell cycle detected");
       }
 
