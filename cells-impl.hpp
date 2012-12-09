@@ -45,43 +45,45 @@ namespace cells {
   using namespace dynvars;
 
   struct dag_node {
-    dag_node(std::shared_ptr<observer> item_) : item(item_) { }
-    std::shared_ptr<observer> item;
+    dag_node(observer* item_) : item(item_) { }
+    observer* item;
     std::unordered_set<dag_node*> incoming_edges;
     std::unordered_set<dag_node*> outgoing_edges;
   };
 
   struct transaction {
-    std::unordered_map<std::shared_ptr<observer>, std::shared_ptr<dag_node>> dag;
+    std::unordered_map<observer*, dag_node*> dag;
   };
 
-  static thread_local dynvar<std::forward_list<std::shared_ptr<observer>>> current_dependencies;
+  static thread_local dynvar<std::forward_list<observer*>> current_dependencies;
   static thread_local dynvar<transaction> current_transaction;
 
   inline void observer::clear_dependencies() {
     for (auto const& dep : dependencies) {
-      dep->remove_dependent(this);
+      std::shared_ptr<observer*> sdep = dep.lock();
+      if (sdep) {
+        (*sdep)->remove_dependent(this);
+      }
     }
     dependencies = {};
   }
 
-  inline void observer::add_dependent(std::shared_ptr<observer> dependent) {
-    dependents.push_front(dependent);
+  inline void observer::add_dependent(observer* dependent) {
+    dependents.push_front(dependent->self);
   }
 
   inline void observer::remove_dependent(observer* dependent) {
-    dependents.remove_if([&](std::weak_ptr<observer> const& other) -> bool {
-      std::shared_ptr<observer> other2 = other.lock();
-      // note: this should also work for empty other
-      return (other2.get() == dependent);
+    dependents.remove_if([&](std::weak_ptr<observer*> const& other) -> bool {
+      std::shared_ptr<observer*> other2 = other.lock();
+      return (!other2 || *other2 == dependent);
     });
   }
   
-  inline void observer::reset_dependencies(std::forward_list<std::shared_ptr<observer>> const& newdeps) {
+  inline void observer::reset_dependencies(std::forward_list<observer*> const& newdeps) {
     clear_dependencies();
-    dependencies = newdeps;
     for (auto const& dep : newdeps) {
-      dep->add_dependent(shared_from_this());
+      dependencies.push_front(dep->self);
+      dep->add_dependent(this);
     }
   }
 
@@ -90,20 +92,23 @@ namespace cells {
       with_transaction([&]() { this->mark(); });
       return;
     }
-    std::shared_ptr<observer> self = shared_from_this();
-    if (current_transaction->dag.find(self) ==
+    if (current_transaction->dag.find(this) ==
         current_transaction->dag.end()) {
       std::unordered_set<dag_node*> incoming_edges;
       std::unordered_set<dag_node*> outgoing_edges;
-      std::shared_ptr<dag_node> node = std::make_shared<dag_node>(self);
-      current_transaction->dag[self] = std::shared_ptr<dag_node>(node);
-      for (std::weak_ptr<observer> x : dependents) {
-        std::shared_ptr<observer> px = x.lock();
+      dag_node* node = new dag_node(this);
+      current_transaction->dag[this] = node;
+      for (auto e = dependents.cbegin(); e != dependents.end(); e++) {
+        std::weak_ptr<observer*> const& x = *e;
+        std::shared_ptr<observer*> px = x.lock();
         if (px) {
-          px->mark();
-          std::shared_ptr<dag_node> xn = current_transaction->dag[px];
-          xn->incoming_edges.insert(node.get());
-          node->outgoing_edges.insert(xn.get());
+          (*px)->mark();
+          dag_node* xn = current_transaction->dag[*px];
+          xn->incoming_edges.insert(node);
+          node->outgoing_edges.insert(xn);
+        } else {
+          // Purge dead nodes.
+          dependents.erase(e);
         }
       }
     }
@@ -120,9 +125,9 @@ namespace cells {
   template <typename T>
   void cell<T>::update() {
     T oldval = current_value;
-    with<std::forward_list<std::shared_ptr<observer>>, void>
+    with<std::forward_list<observer*>, void>
       (current_dependencies,
-       std::forward_list<std::shared_ptr<observer>>(),
+       std::forward_list<observer*>(),
        [=]{
         current_value = recompute(current_value);
         reset_dependencies(*current_dependencies);
@@ -132,7 +137,7 @@ namespace cells {
   template <typename T>
   T& cell<T>::get() {
     if (current_dependencies) {
-      current_dependencies->push_front(shared_from_this());
+      current_dependencies->push_front(this);
       return current_value;
     } else {
       return current_value;
@@ -188,7 +193,7 @@ namespace cells {
       thunk();
 
       //cerr << "; number of affected nodes: " << current_transaction->dag.size() << endl;
-      std::deque<std::shared_ptr<observer>> nodes;
+      std::deque<observer*> nodes;
 
       // topological sort
       std::forward_list<dag_node*> independent_nodes;
@@ -197,7 +202,7 @@ namespace cells {
       for (auto const& o_and_n : current_transaction->dag) {
         auto node = o_and_n.second;
         if (node->incoming_edges.size() == 0) {
-          independent_nodes.push_front(node.get());
+          independent_nodes.push_front(node);
         }
       }
       while (!independent_nodes.empty()) {

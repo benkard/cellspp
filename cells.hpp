@@ -22,14 +22,16 @@
 #include <functional>
 #include <memory>
 #include <forward_list>
+#include <list>
 #include <algorithm>
 
 namespace cells {
 
-  class observer : public virtual std::enable_shared_from_this<observer> {
+  class observer {
   private:
-    std::forward_list<std::weak_ptr<observer>> dependents;
-    std::forward_list<std::shared_ptr<observer>> dependencies;
+    std::shared_ptr<observer*> self;
+    std::list<std::weak_ptr<observer*>> dependents;
+    std::forward_list<std::weak_ptr<observer*>> dependencies;
 
     void clear_dependencies();
     void mark_dependents();
@@ -38,9 +40,11 @@ namespace cells {
     void mark();
 
   public:
-    void add_dependent(std::shared_ptr<observer> dependent);
+    observer() : self(std::make_shared<observer*>(this)) { };
+
+    void add_dependent(observer* dependent);
     void remove_dependent(observer* dependent);
-    void reset_dependencies(std::forward_list<std::shared_ptr<observer>> const& newdeps);
+    void reset_dependencies(std::forward_list<observer*> const& newdeps);
 
     virtual void update() = 0;
 
@@ -63,7 +67,7 @@ namespace cells {
     T& get();
     T& operator *() { return get(); }
     //T operator ()() { return get(); }
-    operator T() { return get(); }
+    //operator T() { return get(); }
 
     virtual ~cell();
   };
@@ -78,13 +82,11 @@ namespace cells {
     std::function<T (T old)> alt_formula;
 
   protected:
-    formula_cell() { }
     virtual T recompute(T);
     virtual T init();
 
   public:
-    //static std::shared_ptr<formula_cell<T>> make() { return std::make_shared<formula_cell<T>>(); }
-    static std::shared_ptr<formula_cell<T>> make() { return std::shared_ptr<formula_cell<T>>(new formula_cell()); }
+    formula_cell() { }
 
     void reset(T value);
     void reset(std::function<T ()>);

@@ -48,14 +48,13 @@ wherever your compiler can find them and `#include <cells.hpp>`.
 
 The API primarily consists of the `cell<T>` and `formula_cell<T>`
 class templates.  Using a `formula_cell<T>` is easy: simply construct
-one using `formula_cell<T>::make()` and use the `reset` method to set
-a formula to compute the value of the cell:
+one and use the `reset` method to set a formula to compute the value
+of the cell:
 
     typedef formula_cell<double> fcell;
-    typedef shared_ptr<fcell>    sfcell;
     
-    sfcell x = fcell::make();
-    x->reset([=](){ return 5; });
+    fcell x;
+    x.reset([](){ return 5; });
     
 For convenience, you can also just write something like `x->reset(5);`
 for setting a constant value.
@@ -63,8 +62,8 @@ for setting a constant value.
 In order to create a dependent cell, simply make use of the other
 cell's value in the formula:
 
-    sfcell double_x = fcell::make();
-    double_x->reset([=](){ return 2 * x->get(); });
+    fcell double_x;
+    double_x.reset([&](){ return 2 * x.get(); });
 
 From now on, whenever `x` changes, `double_x` will be updated
 accordingly.
@@ -72,9 +71,9 @@ accordingly.
 You can create change event observers by writing formulas that make
 use of an observed cell and return a dummy value:
 
-    sfcell simple_observer = fcell::make();
-    simple_observer->reset([=]() -> double {
-      (void)double_x->get();
+    fcell simple_observer;
+    simple_observer.reset([&]() -> double {
+      (void)double_x.get();
       std::cout << "double_x has changed!" << std::endl;
       return 0;
     });
