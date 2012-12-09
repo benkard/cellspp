@@ -41,12 +41,6 @@ changes.  In fact, the multimedia-oriented scripting language JavaFX
 provides just such a kind of limited dataflow mechanism.
 
 
-## Acknowledgments
-
-This work was inspired by Kenny Tilton's Cells library, which extends
-the Common Lisp Object System with dataflow features.
-
-
 ## Usage
 
 This is a header-only library.  Simply put all the `.hpp` files
@@ -84,6 +78,12 @@ use of an observed cell and return a dummy value:
       std::cout << "double_x has changed!" << std::endl;
       return 0;
     });
+
+
+## Acknowledgments
+
+This work was inspired by Kenny Tilton's Cells library, which extends
+the Common Lisp Object System with dataflow features.
 
 
 ## License
