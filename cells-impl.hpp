@@ -58,6 +58,29 @@ namespace cells {
   static thread_local dynvar<std::forward_list<observer*>> current_dependencies;
   static thread_local dynvar<transaction> current_transaction;
 
+  inline observer::observer() : self(std::make_shared<observer*>(this)) { };
+
+  inline observer::observer(observer const& other) : self(std::make_shared<observer*>(this)) {
+    reset_dependents(other.dependents);
+    reset_dependencies(other.dependencies);
+  }
+
+  inline observer& observer::operator =(observer const& other) {
+    reset_dependents(other.dependents);
+    reset_dependencies(other.dependencies);
+    return *this;
+  }
+
+  inline void observer::reset_dependents(std::list<std::weak_ptr<observer*>> const& new_dependents) {
+    for (auto const& dependent : dependents) {
+      std::shared_ptr<observer*> sdependent = dependent.lock();
+      if (sdependent) {
+        remove_dependent(*sdependent);
+      }
+    }
+    dependents = new_dependents;
+  }
+
   inline void observer::clear_dependencies() {
     for (auto const& dep : dependencies) {
       std::shared_ptr<observer*> sdep = dep.lock();
@@ -79,6 +102,17 @@ namespace cells {
     });
   }
   
+  inline void observer::reset_dependencies(std::forward_list<std::weak_ptr<observer*>> const& newdeps)  {
+   clear_dependencies();
+   dependencies = newdeps;
+   for (auto const& dep : newdeps) {
+     shared_ptr<observer*> p = dep.lock();
+     if (p) {
+       (*p)->add_dependent(this);
+     }
+   }
+  }
+
   inline void observer::reset_dependencies(std::forward_list<observer*> const& newdeps) {
     clear_dependencies();
     for (auto const& dep : newdeps) {

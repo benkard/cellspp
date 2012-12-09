@@ -29,22 +29,28 @@ namespace cells {
 
   class observer {
   private:
-    std::shared_ptr<observer*> self;
+    std::shared_ptr<observer*> const self;
     std::list<std::weak_ptr<observer*>> dependents;
     std::forward_list<std::weak_ptr<observer*>> dependencies;
 
     void clear_dependencies();
     void mark_dependents();
 
+    void reset_dependencies(std::forward_list<std::weak_ptr<observer*>> const&);
+    void reset_dependents(std::list<std::weak_ptr<observer*>> const&);
+
   protected:
     void mark();
 
   public:
-    observer() : self(std::make_shared<observer*>(this)) { };
+    observer();
+    observer(observer const& other);
+
+    observer& operator =(observer const& other);
 
     void add_dependent(observer* dependent);
     void remove_dependent(observer* dependent);
-    void reset_dependencies(std::forward_list<observer*> const& newdeps);
+    void reset_dependencies(std::forward_list<observer*> const&);
 
     virtual void update() = 0;
 
