@@ -72,12 +72,6 @@ namespace cells {
   }
 
   inline void observer::reset_dependents(std::list<std::weak_ptr<observer*>> const& new_dependents) {
-    for (auto const& dependent : dependents) {
-      std::shared_ptr<observer*> sdependent = dependent.lock();
-      if (sdependent) {
-        remove_dependent(*sdependent);
-      }
-    }
     dependents = new_dependents;
   }
 
